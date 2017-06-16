@@ -120,4 +120,11 @@ public class TxHandler {
         }
     }
 
+    /**
+     *
+     * */
+    public UTXOPool getUTXOPool() {
+        return this.currentUTXOPool;
+    }
+
 }

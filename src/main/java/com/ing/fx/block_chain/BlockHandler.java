@@ -18,6 +18,7 @@ public class BlockHandler {
     }
 
     /**
+     * Block propagate is nearly identical to transaction propagate. You
      * add {@code block} to the block chain if it is valid.
      * 
      * @return true if the block is valid and has been added, false otherwise
@@ -48,7 +49,9 @@ public class BlockHandler {
             return null;
     }
 
-    /** process a {@code Transaction} */
+    /** process a {@code Transaction}
+     *  propagate a transaction.
+     * */
     public void processTx(Transaction tx) {
         blockChain.addTransaction(tx);
     }
