@@ -55,7 +55,7 @@ public class BlockChain2 {
      * create an empty block chain with just a genesis block. Assume {@code genesisBlock} is a valid
      * block
      */
-    public BlockChain2(Block genesisBlock) {
+    public BlockChain(Block genesisBlock) {
         // IMPLEMENT THIS
         genesis = genesisBlock;
         maxHeightBlock = genesisBlock;
@@ -137,16 +137,21 @@ public class BlockChain2 {
             } else {
                 if (blockPool.size() > 10) renewBlockChain();
                 if (maxHeight <= CUT_OFF_AGE + 1) {
-                    if (!isHashCorrect(block)) return false; // hash not correct!
+                    //if (!isHashCorrect(block)) return false; // hash not correct!
+                    boolean isBlockValid = true;
                     for (Transaction trx : block.getTransactions()) {
-                        if (!txHandler.isValidTx(trx)) return false; // all transactions should be valid!
+                        if (!txHandler.isValidTx(trx)) isBlockValid = false; // all transactions should be valid!
+                        else {
+                            registerValidTrx(trx);
+                        }
                     }
                     /*if (howTall(block) > maxHeight - CUT_OFF_AGE)
                         return false; // block builds on current longest chain to avoid forks*/
-                    registerUTXO(block);
-                    blockPool.add(block);
-                    updateMaxHeightUTXO(block);
-                    return true;
+                    if (isBlockValid) {
+                        registerUTXO(block);
+                        blockPool.add(block);
+                        updateMaxHeightUTXO(block);
+                    } else return false;
                 } else {
                     return false;
                 }
@@ -154,10 +159,29 @@ public class BlockChain2 {
         } catch (Exception e) {
             System.out.println("Error at addBlock(): " + e.getMessage());
         }
-        return false;
+        return true;
     }
 
-    private boolean isHashCorrect(Block block) {
+    private void registerValidTrx(Transaction tx) {
+        for (Transaction.Output output: tx.getOutputs()) {
+            int j = 0;
+            UTXO utxo = new UTXO(tx.getHash(), j);
+            if (null!=txHandler.getUTXOPool()) {
+                if (!txHandler.getUTXOPool().contains(utxo)) {
+                    txHandler.getUTXOPool().addUTXO(utxo, output);
+                }
+                if(!uTXOPool_maxHeight.contains(utxo)) {
+                    uTXOPool_maxHeight.addUTXO(utxo, output);
+                }
+            }
+            j++;
+        }
+        if (null==transactionPool.getTransaction(tx.getHash()))
+            transactionPool.addTransaction(tx);
+    }
+
+    private boolean isHashCorrect(Block block)
+    {
         return null!=block.getHash();
     }
 
@@ -169,10 +193,10 @@ public class BlockChain2 {
             int i = 0;
             for (Transaction.Output output: tx.getOutputs()) {
                 UTXO utxo = new UTXO(tx.getHash(), i);
-                i++;
                 if(uTXOPool_maxHeight.contains(utxo)) {
                     uTXOPool_maxHeight.removeUTXO(utxo);
                 }
+                i++;
             }
             if (null!=transactionPool.getTransaction(tx.getHash()))
                 transactionPool.removeTransaction(tx.getHash());
