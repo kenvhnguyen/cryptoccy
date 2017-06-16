@@ -24,6 +24,9 @@ public class BlockChain {
         blockchain = Collections.synchronizedSet(new LinkedHashSet<Block>(10)); // store item in the order of insertion
         blockchain.add(genesisBlock);
         head = genesisBlock;
+        for (Transaction trx: genesisBlock.getTransactions()) {
+            updateUTXOPoolAfterMining(trx);
+        }
     }
 
     private Block head;
@@ -56,11 +59,10 @@ public class BlockChain {
         return null;
     }
 
-    private UTXOPool uTXOPool_maxHeight = new UTXOPool();
     /** Get the UTXOPool for mining a new block on top of max height block */
     public UTXOPool getMaxHeightUTXOPool() {
         // IMPLEMENT THIS
-        return uTXOPool_maxHeight;
+        return txHandler.getUTXOPool();
     }
 
     /** Get the transaction pool to mine a new block */
@@ -83,26 +85,50 @@ public class BlockChain {
      */
     public boolean addBlock(Block block) {
         // IMPLEMENT THIS
-        if (null!=getBlock(block.getPrevBlockHash())) { // block created by this node, already valid
+        if (null == block.getPrevBlockHash()) {
+            return false;
+        } else if (null!=getBlock(block.getPrevBlockHash())) { // block created by this node, already verified via BlockHandle.createBlock()
             blockchain.add(block);
         } else { // block needs verifying
             if(isNotValid(block)) return false;
             else {
                 blockchain.add(block);
-                for (Transaction transaction: block.getTransactions()) {
-                    addTxToUTXOPool(transaction);
-                }
             }
         }
+        // Update the UTXOPool of the blockchain
         for (Transaction transaction: block.getTransactions()) {
+            updateUTXOPoolAfterMining(transaction);
             transactionPool.removeTransaction(transaction.getHash());
         }
         return true;
     }
 
+    /**
+     * After confirming the transaction (mining), inputs are now officially spent
+     * so needs to be removed from the unspent spool
+     * outputs are now officially the new unspent so needs
+     * to be added to the unspent pool
+     * */
+    private void updateUTXOPoolAfterMining(Transaction validTx) {
+        int m=0;
+        for (Transaction.Output output: validTx.getOutputs()) {
+            UTXO newUTXO = new UTXO(validTx.getHash(), m);
+            txHandler.getUTXOPool().addUTXO(newUTXO, output);
+        }
+        for (Transaction.Input input: validTx.getInputs()) {
+            UTXO spentUTXO = new UTXO(input.prevTxHash, input.outputIndex);
+            for (UTXO utxo: txHandler.getUTXOPool().getAllUTXO()){
+                if (utxo.compareTo(spentUTXO)==0)
+                    txHandler.getUTXOPool().removeUTXO(utxo);
+            }
+        }
+    }
+
     private boolean isNotValid(Block block) {
         for (Transaction trx: block.getTransactions()) {
-            if (!txHandler.isValidTx(trx)) return false;
+            if (!txHandler.isValidTx(trx)) {
+                return false;
+            }
         }
         return true;
     }
@@ -113,16 +139,8 @@ public class BlockChain {
     /** Add a transaction to the transaction pool */
     public void addTransaction(Transaction tx) {
         // IMPLEMENT THIS
-        transactionPool.addTransaction(tx);
-        addTxToUTXOPool(tx);
-    }
-
-    private void addTxToUTXOPool(Transaction tx) {
-        int index = 0;
-        for (Transaction.Output output: tx.getOutputs()) {
-            UTXO utxo = new UTXO(tx.getHash(), index);
-            txHandler.getUTXOPool().addUTXO(utxo, output);
-            index++;
+        if (null==transactionPool.getTransaction(tx.getHash())) {
+            transactionPool.addTransaction(tx);
         }
     }
 }
