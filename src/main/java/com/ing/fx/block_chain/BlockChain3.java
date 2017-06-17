@@ -15,6 +15,15 @@ public class BlockChain {
     public static final int CUT_OFF_AGE = 10;
 
     private Set<Block> blockchain; // all the most recent blocks in the chain
+
+    private TxHandler txHandler = new TxHandler(new UTXOPool());
+
+    private TransactionPool transactionPool = new TransactionPool();
+
+    private Block head; // the max height block of the block chain
+
+    private int height; // the max height of the block chain
+
     /**
      * create an empty block chain with just a genesis block.
      * Assume {@code genesisBlock} is a valid block
@@ -29,8 +38,6 @@ public class BlockChain {
         }
     }
 
-    private Block head;
-    private int height;
     /** Get the maximum height block */
     public Block getMaxHeightBlock() {
         // IMPLEMENT THIS
@@ -104,6 +111,18 @@ public class BlockChain {
     }
 
     /**
+     * validate a block not created by this node
+     * */
+    private boolean isNotValid(Block block) {
+        for (Transaction trx: block.getTransactions()) {
+            if (!txHandler.isValidTx(trx)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * After confirming the transaction (mining), inputs are now officially spent
      * so needs to be removed from the unspent spool
      * outputs are now officially the new unspent so needs
@@ -124,18 +143,6 @@ public class BlockChain {
         }
     }
 
-    private boolean isNotValid(Block block) {
-        for (Transaction trx: block.getTransactions()) {
-            if (!txHandler.isValidTx(trx)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private TxHandler txHandler = new TxHandler(new UTXOPool());
-
-    private TransactionPool transactionPool = new TransactionPool();
     /** Add a transaction to the transaction pool */
     public void addTransaction(Transaction tx) {
         // IMPLEMENT THIS
