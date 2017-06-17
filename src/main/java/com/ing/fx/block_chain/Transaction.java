@@ -161,7 +161,7 @@ public class Transaction {
         inputs = new ArrayList<Input>();
         outputs = new ArrayList<Output>();
         addOutput(coin, address);
-        finalize();
+        finalize(); // hash of coin base transaction is set here in finalize()
     }
 
     public boolean isCoinbase() {
