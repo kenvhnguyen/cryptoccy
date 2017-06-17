@@ -37,7 +37,7 @@ public class Transaction {
         /** used output's index in the previous transaction */
         public int outputIndex;
         /** the signature produced to check validity */
-        public byte[] signature;
+        public byte[] signature; // in reality, this is also a script called SigScript
 
         public Input(byte[] prevHash, int index) {
             if (prevHash == null)
@@ -99,7 +99,11 @@ public class Transaction {
         /** value in bitcoins of the output */
         public double value;
         /** the address or public key of the recipient */ // in Bitcoin, there is actually a Bitcoin script here
-        public PublicKey address;
+        public PublicKey address; // In reality, this is Bitcoin script called PubScript.
+        /** SigScript and PubScript will get pasted together when a transaction is validated
+         * and if the concatenated script can run without errors, this is considered a valid transaction.
+         * More useful info in Bitcoin Script and Application of Bitcoin Scripts
+         * */
 
         public Output(double v, PublicKey addr) {
             value = v;
@@ -136,7 +140,9 @@ public class Transaction {
         }
     }
 
-    /** hash of the transaction, its unique id */
+    /** hash of the transaction, its unique id
+     * to let us do hash pointer
+     * */
     private byte[] hash;
     private ArrayList<Input> inputs;
     private ArrayList<Output> outputs;

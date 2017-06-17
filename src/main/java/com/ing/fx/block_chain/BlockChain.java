@@ -34,20 +34,26 @@ public class BlockChain {
     public BlockChain(Block genesisBlock) {
         // IMPLEMENT THIS
         // use LinkedHashSet to store item in the order of insertion
-        blockchain = Collections.synchronizedSet(new LinkedHashSet<Block>(10));
+        blockchain = Collections.synchronizedSet(new LinkedHashSet<Block>());
         blockchain.add(genesisBlock);
         head = genesisBlock;
         for (Transaction trx: genesisBlock.getTransactions()) {
-            updateUTXOPoolAfterMining(trx);
+            updateUTXOPool(trx);
+        }
+    }
+
+    private void updateUTXOPool(Transaction validTx) {
+        int m=0;
+        for (Transaction.Output output: validTx.getOutputs()) {
+            UTXO newUTXO = new UTXO(validTx.getHash(), m);
+            txHandler.getUTXOPool().addUTXO(newUTXO, output);
         }
     }
 
     /** Get the maximum height block */
     public Block getMaxHeightBlock() {
         // IMPLEMENT THIS
-        Iterator iterator = blockchain.iterator();
-        while (iterator.hasNext()) {
-            Block block = (Block)iterator.next();
+        for (Block block : blockchain) {
             if (getHeight(block) >= height) {
                 height = getHeight(block);
                 head = block;
@@ -62,9 +68,7 @@ public class BlockChain {
     }
 
     private Block getBlock(byte[] hash) {
-        Iterator iterator = blockchain.iterator();
-        while(iterator.hasNext()) {
-            Block block = (Block)iterator.next();
+        for (Block block : blockchain) {
             if (block.getHash().equals(hash)) return block;
         }
         return null;
@@ -100,14 +104,12 @@ public class BlockChain {
             return false;
         /*} else if (getHeight(block) > (height - CUT_OFF_AGE)) {
             return false;*/
-        } else if (null!=getBlock(block.getPrevBlockHash())) {
-            // block created by this node, already verified via BlockHandle.createBlock()
+        } else if (null==getBlock(block.getPrevBlockHash())) {
+            return false;
+        } else if (hasDoubleSpent(block)) {
+            return false;
+        } else {
             blockchain.add(block);
-        } else { // block needs verifying
-            if(isNotValid(block)) return false;
-            else {
-                blockchain.add(block);
-            }
         }
         // Update the UTXOPool of the blockchain
         /**
@@ -120,8 +122,8 @@ public class BlockChain {
          * but absent in the side branch might get lost.
          * */
         for (Transaction transaction: block.getTransactions()) {
-            updateUTXOPoolAfterMining(transaction);
-            transactionPool.removeTransaction(transaction.getHash());
+            if (null!=transactionPool.getTransaction(transaction.getHash()))
+                transactionPool.removeTransaction(transaction.getHash());
         }
         /**
          * Assume for simplicity that a coinbase transaction of a block is available
@@ -129,43 +131,27 @@ public class BlockChain {
          * (This is contrary to the actual Bitcoin protocol when
          * there is a MATURITY period of 100 confirmations before it can be spent).
          * */
-        //transactionPool.addTransaction(block.getCoinbase());
-        //updateUTXOPoolAfterMining(block.getCoinbase());
+        if (null!=block.getCoinbase()) {
+            transactionPool.addTransaction(block.getCoinbase());
+            updateUTXOPool(block.getCoinbase());
+        }
 
         return true;
     }
 
-    /**
-     * validate a block not created by this node
-     * */
-    private boolean isNotValid(Block block) {
-        for (Transaction trx: block.getTransactions()) {
-            if (!txHandler.isValidTx(trx)) {
-                return false;
+    private ArrayList<UTXO> claimedUTXO;
+    private boolean hasDoubleSpent(Block block) {
+        claimedUTXO = new ArrayList<>();
+        for (Transaction transaction: block.getTransactions()) {
+            for (Transaction.Input input: transaction.getInputs()) {
+                UTXO utxo = new UTXO(input.prevTxHash, input.outputIndex);
+                if (claimedUTXO.contains(utxo))
+                    return true; // double spent found!
+                else
+                    claimedUTXO.add(utxo);
             }
         }
-        return true;
-    }
-
-    /**
-     * After confirming the transaction (mining), inputs are now officially spent
-     * so needs to be removed from the unspent spool
-     * outputs are now officially the new unspent so needs
-     * to be added to the unspent pool
-     * */
-    private void updateUTXOPoolAfterMining(Transaction validTx) {
-        int m=0;
-        for (Transaction.Output output: validTx.getOutputs()) {
-            UTXO newUTXO = new UTXO(validTx.getHash(), m);
-            txHandler.getUTXOPool().addUTXO(newUTXO, output);
-        }
-        for (Transaction.Input input: validTx.getInputs()) {
-            UTXO spentUTXO = new UTXO(input.prevTxHash, input.outputIndex);
-            for (UTXO utxo: txHandler.getUTXOPool().getAllUTXO()){
-                if (utxo.compareTo(spentUTXO)==0)
-                    txHandler.getUTXOPool().removeUTXO(utxo);
-            }
-        }
+        return false;
     }
 
     /** Add a transaction to the transaction pool */
