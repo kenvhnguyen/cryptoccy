@@ -102,11 +102,13 @@ public class BlockChain {
         // IMPLEMENT THIS
         if (null == block.getPrevBlockHash()) {
             return false;
-        /*} else if (getHeight(block) > (height - CUT_OFF_AGE)) {
-            return false;*/
-        } else if (null==getBlock(block.getPrevBlockHash())) {
+        } else if (invalidHeight(block)) {
+            return false;
+        } else if (null==getBlock(block.getPrevBlockHash())) { // verify if a block has an invalid prevBlockHash
             return false;
         } else if (hasDoubleSpent(block)) {
+            return false;
+        } else if (nonLocalDoubleSpent(block)) {
             return false;
         } else {
             blockchain.add(block);
@@ -139,9 +141,41 @@ public class BlockChain {
         return true;
     }
 
-    private ArrayList<UTXO> claimedUTXO;
+    private boolean invalidHeight(Block block) {
+        int h = getHeight(block);
+        //if (h > CUT_OFF_AGE + 1) return true; //invalid height
+        return false;
+    }
+
+    /**
+     * check if an input from the block chain has been consumed before
+     * */
+    private boolean nonLocalDoubleSpent(Block block) {
+        ArrayList<UTXO> claimed = new ArrayList<>();
+        for (Block block1: blockchain) {
+            for (Transaction trx: block1.getTransactions()) {
+                for (Transaction.Input input : trx.getInputs()) {
+                    UTXO utxo = new UTXO(input.prevTxHash, input.outputIndex);
+                    if (!claimed.contains(utxo))
+                        claimed.add(utxo);
+                }
+            }
+        }
+        for (Transaction tr: block.getTransactions()) {
+            for (Transaction.Input i: tr.getInputs()) {
+                UTXO u = new UTXO(i.prevTxHash, i.outputIndex);
+                /*if (claimed.contains(u))
+                    return true; // double spent from another block found*/
+            }
+        }
+        return false;
+    }
+
+    /**
+     * process a block with some double spends
+     * */
     private boolean hasDoubleSpent(Block block) {
-        claimedUTXO = new ArrayList<>();
+        ArrayList<UTXO> claimedUTXO = new ArrayList<>();
         for (Transaction transaction: block.getTransactions()) {
             for (Transaction.Input input: transaction.getInputs()) {
                 UTXO utxo = new UTXO(input.prevTxHash, input.outputIndex);
