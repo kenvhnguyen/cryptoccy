@@ -53,10 +53,12 @@ public class BlockChain {
     /** Get the maximum height block */
     public Block getMaxHeightBlock() {
         // IMPLEMENT THIS
-        for (Block block : blockchain) {
-            if (getHeight(block) >= height) {
-                height = getHeight(block);
-                head = block;
+        synchronized (blockchain) {
+            for (Block block : blockchain) {
+                if (getHeight(block) >= height) {
+                    height = getHeight(block);
+                    head = block;
+                }
             }
         }
         return head;
@@ -68,8 +70,10 @@ public class BlockChain {
     }
 
     private Block getBlock(byte[] hash) {
-        for (Block block : blockchain) {
-            if (block.getHash().equals(hash)) return block;
+        synchronized (blockchain){
+            for (Block block : blockchain) {
+                if (block.getHash().equals(hash)) return block;
+            }
         }
         return null;
     }
@@ -99,8 +103,8 @@ public class BlockChain {
      * @return true if block is successfully added
      */
     public boolean addBlock(Block block) {
-        // IMPLEMENT THIS
-        if (null == block.getPrevBlockHash()) {
+        // IMPLEMENT THIS/
+        if (null == block.getPrevBlockHash()) { // genesis block (parents is a null hash)
             return false;
         } else if (invalidHeight(block)) {
             return false;
@@ -111,7 +115,11 @@ public class BlockChain {
         } else if (nonLocalDoubleSpent(block)) {
             return false;
         } else {
-            blockchain.add(block);
+            synchronized (blockchain) {
+                if (!blockchain.contains(block)) {
+                    blockchain.add(block);
+                }
+            }
         }
         // Update the UTXOPool of the blockchain
         /**
@@ -144,6 +152,9 @@ public class BlockChain {
     private boolean invalidHeight(Block block) {
         int h = getHeight(block);
         //if (h > CUT_OFF_AGE + 1) return true; //invalid height
+        if (h <= height - CUT_OFF_AGE){
+            return true;
+        }
         return false;
     }
 
@@ -152,12 +163,14 @@ public class BlockChain {
      * */
     private boolean nonLocalDoubleSpent(Block block) {
         ArrayList<UTXO> claimed = new ArrayList<>();
-        for (Block block1: blockchain) {
-            for (Transaction trx: block1.getTransactions()) {
-                for (Transaction.Input input : trx.getInputs()) {
-                    UTXO utxo = new UTXO(input.prevTxHash, input.outputIndex);
-                    if (!claimed.contains(utxo))
-                        claimed.add(utxo);
+        synchronized (blockchain) {
+            for (Block blk: blockchain) {
+                for (Transaction trx: blk.getTransactions()) {
+                    for (Transaction.Input input : trx.getInputs()) {
+                        UTXO utxo = new UTXO(input.prevTxHash, input.outputIndex);
+                        if (!claimed.contains(utxo))
+                            claimed.add(utxo);
+                    }
                 }
             }
         }
