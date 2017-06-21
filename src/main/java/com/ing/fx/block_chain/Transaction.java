@@ -1,9 +1,7 @@
 package com.ing.fx.block_chain;
 
 import java.nio.ByteBuffer;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
+import java.security.*;
 import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -375,5 +373,20 @@ public class Transaction {
             hash = hash * 31 + getOutput(i).hashCode();
         }
         return hash;
+    }
+
+    public void signTx(PrivateKey sk, int input) throws SignatureException {
+        Signature sig = null;
+        try {
+            sig = Signature.getInstance("SHA256withRSA");
+            sig.initSign(sk);
+            sig.update(this.getRawDataToSign(input));
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            throw new RuntimeException(e);
+        }
+        this.addSignature(sig.sign(),input);
+        // Note that this method is incorrectly named, and should not in fact override the Java
+        // object finalize garbage collection related method.
+        this.finalize();
     }
 }

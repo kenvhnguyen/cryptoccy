@@ -106,8 +106,6 @@ public class BlockChain {
         // IMPLEMENT THIS/
         if (null == block.getPrevBlockHash()) { // genesis block (parents is a null hash)
             return false;
-        } else if (invalidHeight(block)) {
-            return false;
         } else if (null==getBlock(block.getPrevBlockHash())) { // verify if a block has an invalid prevBlockHash
             return false;
         } else if (hasDoubleSpent(block)) {
@@ -149,15 +147,6 @@ public class BlockChain {
         return true;
     }
 
-    private boolean invalidHeight(Block block) {
-        int h = getHeight(block);
-        //if (h > CUT_OFF_AGE + 1) return true; //invalid height
-        if (h <= height - CUT_OFF_AGE){
-            return true;
-        }
-        return false;
-    }
-
     /**
      * check if an input from the block chain has been consumed before
      * */
@@ -177,8 +166,8 @@ public class BlockChain {
         for (Transaction tr: block.getTransactions()) {
             for (Transaction.Input i: tr.getInputs()) {
                 UTXO u = new UTXO(i.prevTxHash, i.outputIndex);
-                /*if (claimed.contains(u))
-                    return true; // double spent from another block found*/
+                if (claimed.contains(u))
+                    return true; // double spent from another block found
             }
         }
         return false;
