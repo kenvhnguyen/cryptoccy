@@ -69,6 +69,9 @@ public class Block {
         return raw;
     }
 
+    /**
+     * generate a hash for the whole block
+     * */
     public void finalize() {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
