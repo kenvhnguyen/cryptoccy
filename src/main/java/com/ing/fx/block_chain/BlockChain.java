@@ -11,21 +11,9 @@ import com.ing.fx.scrooge_coin.UTXOPool;
 import java.util.*;
 public class BlockChain {
     public static final int CUT_OFF_AGE = 10;
-
-    private Set<Block> blockchain; // all the most recent blocks in the chain
-
-    /**
-     * Since there can be (multiple) forks, blocks form a tree rather than a list.
-     * Your design should take this into account. You have to maintain a UTXO pool
-     * corresponding to every block on top of which a new block might be created.
-     * */
-    private TxHandler txHandler = new TxHandler(new UTXOPool());
-
-    private TransactionPool transactionPool = new TransactionPool();
-
-    private Block head; // the max height block of the block chain
-
-    private int height; // the max height of the block chain
+    private Map blockchain;
+    private TransactionPool transactionPool;
+    private Node head; // the max height block of the block chain
 
     /**
      * create an empty block chain with just a genesis block.
@@ -33,55 +21,40 @@ public class BlockChain {
      */
     public BlockChain(Block genesisBlock) {
         // IMPLEMENT THIS
-        // use LinkedHashSet to store item in the order of insertion
-        blockchain = Collections.synchronizedSet(new LinkedHashSet<Block>());
-        blockchain.add(genesisBlock);
-        head = genesisBlock;
-        for (Transaction trx: genesisBlock.getTransactions()) {
-            updateUTXOPool(trx);
-        }
+        blockchain = Collections.synchronizedMap(new HashMap<ByteArrayWrapper, Node>());
+        UTXOPool utxoPool = new UTXOPool();
+        Node genesis = new Node(null, genesisBlock, utxoPool);
+        blockchain.put(new ByteArrayWrapper(genesisBlock.getHash()), genesis);
+        transactionPool = new TransactionPool();
+        updateUTXOPool(genesisBlock, utxoPool);
+        head = genesis;
     }
 
-    private void updateUTXOPool(Transaction validTx) {
+    /**
+     * Assume for simplicity that a coinbase transaction of a block is available
+     * to be spent in the next block mined on top of it
+     * (This is contrary to the actual Bitcoin protocol when
+     * there is a MATURITY period of 100 confirmations before it can be spent).
+     * */
+    private void updateUTXOPool(Block block, UTXOPool utxoPool) {
         int m=0;
-        for (Transaction.Output output: validTx.getOutputs()) {
-            UTXO newUTXO = new UTXO(validTx.getHash(), m);
-            txHandler.getUTXOPool().addUTXO(newUTXO, output);
+        Transaction trx = block.getCoinbase();
+        for (Transaction.Output output: trx.getOutputs()) {
+            UTXO newUTXO = new UTXO(trx.getHash(), m);
+            utxoPool.addUTXO(newUTXO, output);
+            m++;
         }
     }
 
     /** Get the maximum height block */
     public Block getMaxHeightBlock() {
-        // IMPLEMENT THIS
-        synchronized (blockchain) {
-            for (Block block : blockchain) {
-                if (getHeight(block) >= height) {
-                    height = getHeight(block);
-                    head = block;
-                }
-            }
-        }
-        return head;
-    }
-
-    private int getHeight(Block block) {
-        if (block==null) return 0;
-        else return 1 + getHeight(getBlock(block.getPrevBlockHash()));
-    }
-
-    private Block getBlock(byte[] hash) {
-        synchronized (blockchain){
-            for (Block block : blockchain) {
-                if (block.getHash().equals(hash)) return block;
-            }
-        }
-        return null;
+        return head.block;
     }
 
     /** Get the UTXOPool for mining a new block on top of max height block */
     public UTXOPool getMaxHeightUTXOPool() {
         // IMPLEMENT THIS
-        return txHandler.getUTXOPool();
+        return head.getUTXOPool();
     }
 
     /** Get the transaction pool to mine a new block */
@@ -106,51 +79,49 @@ public class BlockChain {
         // IMPLEMENT THIS/
         if (null == block.getPrevBlockHash()) { // genesis block (parents is a null hash)
             return false;
-        } else if (null==getBlock(block.getPrevBlockHash())) { // verify if a block has an invalid prevBlockHash
-            return false;
-        } else if (hasDoubleSpent(block)) {
-            return false;
-        } else if (nonLocalDoubleSpent(block)) {
-            return false;
-        } else {
-            synchronized (blockchain) {
-                if (!blockchain.contains(block)) {
-                    blockchain.add(block);
-                }
-            }
         }
-        // Update the UTXOPool of the blockchain
-        /**
-         * Maintain only one global Transaction Pool for the block chain and
-         * keep adding transactions to it on receiving transactions and
-         * remove transactions from it if a new block is received or created
-         * It is okay if some transactions get dropped during a block chain reorganization,
-         * i.e., when a side branch becomes the new longest branch
-         * Specifically, transactions present in the original main branch (and thus removed from the transaction pool)
-         * but absent in the side branch might get lost.
-         * */
-        for (Transaction transaction: block.getTransactions()) {
-            if (null!=transactionPool.getTransaction(transaction.getHash()))
-                transactionPool.removeTransaction(transaction.getHash());
+        Node parent = (Node)blockchain.get(new ByteArrayWrapper(block.getPrevBlockHash()));
+        if (null == parent) { // verify if a block has an invalid prevBlockHash
+            return false;
         }
-        /**
-         * Assume for simplicity that a coinbase transaction of a block is available
-         * to be spent in the next block mined on top of it
-         * (This is contrary to the actual Bitcoin protocol when
-         * there is a MATURITY period of 100 confirmations before it can be spent).
-         * */
-        if (null!=block.getCoinbase()) {
-            transactionPool.addTransaction(block.getCoinbase());
-            updateUTXOPool(block.getCoinbase());
+        if (blockHasInvalidTrx(block)) {
+            return false;
+        }
+        if (isHeightInvalid(block)) {
+            return false;
         }
 
+        updateUTXOPool(block, parent.getUTXOPool());
+        Node newNode = new Node(parent, block, parent.getUTXOPool());
+
+        synchronized (blockchain) {
+            blockchain.put(new ByteArrayWrapper(block.getHash()), newNode);
+        }
+        /*for (Transaction transaction: block.getTransactions()) {
+            if (null!=transactionPool.getTransaction(transaction.getHash()))
+                transactionPool.removeTransaction(transaction.getHash());
+        }*/
+        if (newNode.height > head.height)
+            head = newNode;
         return true;
+    }
+
+    private boolean isHeightInvalid(Block block) {
+        Node parent = (Node)blockchain.get(new ByteArrayWrapper(block.getPrevBlockHash()));
+        return (parent.height + 1 <= head.height - CUT_OFF_AGE);
+    }
+
+    private boolean blockHasInvalidTrx(Block block) {
+        Node parent = (Node)blockchain.get(new ByteArrayWrapper(block.getPrevBlockHash()));
+        TxHandler txHandler = new TxHandler(parent.getUTXOPool());
+        Transaction[] trxs = block.getTransactions().toArray(new Transaction[0]);
+        return (txHandler.handleTxs(trxs).length!=trxs.length);
     }
 
     /**
      * check if an input from the block chain has been consumed before
      * */
-    private boolean nonLocalDoubleSpent(Block block) {
+    /*private boolean nonLocalDoubleSpent(Block block) {
         ArrayList<UTXO> claimed = new ArrayList<>();
         synchronized (blockchain) {
             for (Block blk: blockchain) {
@@ -171,7 +142,7 @@ public class BlockChain {
             }
         }
         return false;
-    }
+    }*/
 
     /**
      * process a block with some double spends
@@ -193,8 +164,32 @@ public class BlockChain {
     /** Add a transaction to the transaction pool */
     public void addTransaction(Transaction tx) {
         // IMPLEMENT THIS
-        if (null==transactionPool.getTransaction(tx.getHash())) {
-            transactionPool.addTransaction(tx);
+        transactionPool.addTransaction(tx);
+    }
+
+    /**
+     * a node in the block chain
+     * */
+    private class Node {
+        private Node parent;
+        private List<Node> children;
+        private Block block;
+        private UTXOPool utxoPool;
+        private int height;
+        public Node(Node parent, Block block, UTXOPool utxoPool) {
+            this.parent = parent;
+            this.children = new ArrayList<>();
+            this.block = block;
+            this.utxoPool = utxoPool;
+            if (null==parent) {
+                height = 1;
+            } else {
+                height = 1 + parent.height;
+                parent.children.add(this);
+            }
+        }
+        public UTXOPool getUTXOPool(){
+            return this.utxoPool;
         }
     }
 }

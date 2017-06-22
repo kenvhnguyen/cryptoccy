@@ -6,19 +6,7 @@ package com.ing.fx.block_chain;
 /**
  * In this assignment you will implement a node that’s part of a block-chain-based distributed consensus protocol.
  * Specifically, your code will receive incoming transactions and blocks and maintain an updated block chain.
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- * */
-
+  * */
 
 /**
  * Test output:
