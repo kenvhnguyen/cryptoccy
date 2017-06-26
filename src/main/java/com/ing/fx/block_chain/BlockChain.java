@@ -118,49 +118,6 @@ public class BlockChain {
         return (txHandler.handleTxs(trxs).length!=trxs.length);
     }
 
-    /**
-     * check if an input from the block chain has been consumed before
-     * */
-    /*private boolean nonLocalDoubleSpent(Block block) {
-        ArrayList<UTXO> claimed = new ArrayList<>();
-        synchronized (blockchain) {
-            for (Block blk: blockchain) {
-                for (Transaction trx: blk.getTransactions()) {
-                    for (Transaction.Input input : trx.getInputs()) {
-                        UTXO utxo = new UTXO(input.prevTxHash, input.outputIndex);
-                        if (!claimed.contains(utxo))
-                            claimed.add(utxo);
-                    }
-                }
-            }
-        }
-        for (Transaction tr: block.getTransactions()) {
-            for (Transaction.Input i: tr.getInputs()) {
-                UTXO u = new UTXO(i.prevTxHash, i.outputIndex);
-                if (claimed.contains(u))
-                    return true; // double spent from another block found
-            }
-        }
-        return false;
-    }*/
-
-    /**
-     * process a block with some double spends
-     * */
-    private boolean hasDoubleSpent(Block block) {
-        ArrayList<UTXO> claimedUTXO = new ArrayList<>();
-        for (Transaction transaction: block.getTransactions()) {
-            for (Transaction.Input input: transaction.getInputs()) {
-                UTXO utxo = new UTXO(input.prevTxHash, input.outputIndex);
-                if (claimedUTXO.contains(utxo))
-                    return true; // double spent found!
-                else
-                    claimedUTXO.add(utxo);
-            }
-        }
-        return false;
-    }
-
     /** Add a transaction to the transaction pool */
     public void addTransaction(Transaction tx) {
         // IMPLEMENT THIS
