@@ -13,7 +13,7 @@ public class BlockChain {
     public static final int CUT_OFF_AGE = 10;
     private Map blockchain;
     private TransactionPool transactionPool;
-    private Node head; // the max height block of the block chain
+    private Node tail; // the max height block of the block chain
 
     /**
      * create an empty block chain with just a genesis block.
@@ -27,7 +27,7 @@ public class BlockChain {
         blockchain.put(new ByteArrayWrapper(genesisBlock.getHash()), genesis);
         transactionPool = new TransactionPool();
         updateUTXOPool(genesisBlock, utxoPool);
-        head = genesis;
+        tail = genesis;
     }
 
     /**
@@ -48,13 +48,13 @@ public class BlockChain {
 
     /** Get the maximum height block */
     public Block getMaxHeightBlock() {
-        return head.block;
+        return tail.block;
     }
 
     /** Get the UTXOPool for mining a new block on top of max height block */
     public UTXOPool getMaxHeightUTXOPool() {
         // IMPLEMENT THIS
-        return head.getUTXOPool();
+        return tail.getUTXOPool();
     }
 
     /** Get the transaction pool to mine a new block */
@@ -101,14 +101,14 @@ public class BlockChain {
             if (null!=transactionPool.getTransaction(transaction.getHash()))
                 transactionPool.removeTransaction(transaction.getHash());
         }*/
-        if (newNode.height > head.height)
-            head = newNode;
+        if (newNode.height > tail.height)
+            tail = newNode;
         return true;
     }
 
     private boolean isHeightInvalid(Block block) {
         Node parent = (Node)blockchain.get(new ByteArrayWrapper(block.getPrevBlockHash()));
-        return (parent.height + 1 <= head.height - CUT_OFF_AGE);
+        return (parent.height + 1 <= tail.height - CUT_OFF_AGE);
     }
 
     private boolean blockHasInvalidTrx(Block block) {
